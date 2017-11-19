@@ -1,11 +1,14 @@
 //Include and link appropriate libraries and headers//
 #pragma comment(lib, "d3d11.lib")
 #pragma comment(lib, "d3dcompiler.lib")
+#pragma comment (lib, "dinput8.lib")
+#pragma comment (lib, "dxguid.lib")
 
 #include <windows.h>
 #include <d3d11.h>
 #include <directxmath.h>
 #include <d3dcompiler.h>
+#include <dinput.h>
 
 using namespace DirectX;
 
@@ -14,21 +17,51 @@ IDXGISwapChain* SwapChain;
 ID3D11Device* d3d11Device;
 ID3D11DeviceContext* d3d11DevCon;
 ID3D11RenderTargetView* renderTargetView;
-
+ID3D11Buffer* triangleIndexBuffer;
 ID3D11Buffer* triangleVertBuffer;
 ID3D11VertexShader* VS;
 ID3D11PixelShader* PS;
 ID3D10Blob* VS_Buffer;
 ID3D10Blob* PS_Buffer;
 ID3D11InputLayout* vertLayout;
+ID3D11Buffer* cbPerObjectBuffer;
+IDirectInputDevice8* DIKeyboard;
+IDirectInputDevice8* DIMouse;
 
 //Global Declarations - Others//
 LPCTSTR WndClassName = "firstwindow";
 HWND hwnd = NULL;
 HRESULT hr;
 
-const int Width = 300;
-const int Height = 300;
+const int Width = 1920;
+const int Height = 1080;
+
+DIMOUSESTATE mouseLastState;
+LPDIRECTINPUT8 DirectInput;
+
+XMMATRIX WVP;
+XMMATRIX World;
+XMMATRIX triangleWorld;
+XMMATRIX camView;
+XMMATRIX camProjection;
+
+XMVECTOR camPosition;
+XMVECTOR camTarget;
+XMVECTOR camUp;
+
+XMMATRIX Rotation;
+XMMATRIX Scale;
+XMMATRIX Translation;
+float rot = 0.01f;
+
+double countsPerSecond = 0.0;
+__int64 CounterStart = 0;
+
+int frameCount = 0;
+int fps = 0;
+
+__int64 frameTimeOld = 0;
+double frameTime;
 
 //Function Prototypes//
 bool InitializeDirect3d11App(HINSTANCE hInstance);
@@ -37,18 +70,36 @@ bool InitScene();
 void UpdateScene();
 void DrawScene();
 
+void UpdateScene(double time);
+
+//void RenderText(std::wstring text, int inInt);
+
+void StartTimer();
+double GetTime();
+double GetFrameTime();
+
 bool InitializeWindow(HINSTANCE hInstance,
 	int ShowWnd,
 	int width, int height,
 	bool windowed);
 int messageloop();
 
+bool InitDirectInput(HINSTANCE hInstance);
+void DetectInput(double time);
+
 LRESULT CALLBACK WndProc(HWND hWnd,
 	UINT msg,
 	WPARAM wParam,
 	LPARAM lParam);
 
-///////////////**************new**************////////////////////
+//Create effects constant buffer's structure//
+struct cbPerObject
+{
+	XMMATRIX  WVP;
+};
+
+cbPerObject cbPerObj;
+
 //Vertex Structure and Vertex Layout (Input Layout)//
 struct Vertex    //Overloaded Vertex Structure
 {
@@ -67,7 +118,6 @@ D3D11_INPUT_ELEMENT_DESC layout[] =
 	{ "COLOR", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 12, D3D11_INPUT_PER_VERTEX_DATA, 0 },
 };
 UINT numElements = ARRAYSIZE(layout);
-///////////////**************new**************////////////////////
 
 int WINAPI WinMain(HINSTANCE hInstance,    //Main windows function
 	HINSTANCE hPrevInstance,
@@ -92,6 +142,13 @@ int WINAPI WinMain(HINSTANCE hInstance,    //Main windows function
 	if (!InitScene())    //Initialize our scene
 	{
 		MessageBox(0, "Scene Initialization - Failed",
+			"Error", MB_OK);
+		return 0;
+	}
+
+	if (!InitDirectInput(hInstance))
+	{
+		MessageBox(0, "Direct Input Initialization - Failed",
 			"Error", MB_OK);
 		return 0;
 	}
@@ -147,7 +204,7 @@ bool InitializeWindow(HINSTANCE hInstance,
 	hwnd = CreateWindowEx(
 		NULL,
 		WndClassName,
-		"Lesson 4 - Begin Drawing",
+		"Swarm AI - Elliott Smith",
 		WS_OVERLAPPEDWINDOW,
 		CW_USEDEFAULT, CW_USEDEFAULT,
 		width, height,
@@ -196,7 +253,7 @@ bool InitializeDirect3d11App(HINSTANCE hInstance)
 	swapChainDesc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
 	swapChainDesc.BufferCount = 1;
 	swapChainDesc.OutputWindow = hwnd;
-	swapChainDesc.Windowed = TRUE;
+	swapChainDesc.Windowed = false;
 	swapChainDesc.SwapEffect = DXGI_SWAP_EFFECT_DISCARD;
 
 
@@ -218,19 +275,124 @@ bool InitializeDirect3d11App(HINSTANCE hInstance)
 	return true;
 }
 
+bool InitDirectInput(HINSTANCE hInstance)
+{
+	hr = DirectInput8Create(hInstance,
+		DIRECTINPUT_VERSION,
+		IID_IDirectInput8,
+		(void**)&DirectInput,
+		NULL);
+
+	hr = DirectInput->CreateDevice(GUID_SysKeyboard,
+		&DIKeyboard,
+		NULL);
+
+	hr = DirectInput->CreateDevice(GUID_SysMouse,
+		&DIMouse,
+		NULL);
+
+	hr = DIKeyboard->SetDataFormat(&c_dfDIKeyboard);
+	hr = DIKeyboard->SetCooperativeLevel(hwnd, DISCL_FOREGROUND | DISCL_NONEXCLUSIVE);
+
+	hr = DIMouse->SetDataFormat(&c_dfDIMouse);
+	hr = DIMouse->SetCooperativeLevel(hwnd, DISCL_EXCLUSIVE | DISCL_NOWINKEY | DISCL_FOREGROUND);
+
+	return true;
+}
+
+void DetectInput(double time)
+{
+	DIMOUSESTATE mouseCurrState;
+
+	BYTE keyboardState[256];
+
+	DIKeyboard->Acquire();
+	DIMouse->Acquire();
+
+	DIMouse->GetDeviceState(sizeof(DIMOUSESTATE), &mouseCurrState);
+
+	DIKeyboard->GetDeviceState(sizeof(keyboardState), (LPVOID)&keyboardState);
+
+	if (keyboardState[DIK_ESCAPE] & 0x80)
+		PostMessage(hwnd, WM_DESTROY, 0, 0);
+
+	XMFLOAT4 camPos;
+
+	XMStoreFloat4(&camPos, camPosition);
+
+	if (keyboardState[DIK_LEFT] & 0x80)
+	{
+		camPos.x -= 100.0f;
+
+		XMVectorSetIntX(camPosition, camPos.x);
+	}
+	if (keyboardState[DIK_RIGHT] & 0x80)
+	{
+		camPos.x += 100.0f;
+
+		XMVectorSetIntX(camPosition, camPos.x);
+	}
+
+	if (keyboardState[DIK_UP] & 0x80)
+	{
+		camPos.y += 100.0f;
+
+		XMVectorSetIntY(camPosition, camPos.y);
+	}
+	if (keyboardState[DIK_DOWN] & 0x80)
+	{
+		camPos.y -= 100.0f;
+
+		XMVectorSetIntY(camPosition, camPos.y);
+	}
+
+	if (mouseCurrState.lX != mouseLastState.lX)
+	{
+		//scaleX -= (mouseCurrState.lX * 0.001f);
+	}
+
+	if (mouseCurrState.lY != mouseLastState.lY)
+	{
+		//scaleY -= (mouseCurrState.lY * 0.001f);
+	}
+
+	/*if (rotx > 6.28)
+		rotx -= 6.28;
+	else if (rotx < 0)
+		rotx = 6.28 + rotx;
+
+	if (rotz > 6.28)
+		rotz -= 6.28;
+	else if (rotz < 0)
+		rotz = 6.28 + rotz;*/
+
+	mouseLastState = mouseCurrState;
+
+	return;
+}
+
 void CleanUp()
 {
+	SwapChain->SetFullscreenState(false, NULL);
+	PostMessage(hwnd, WM_DESTROY, 0, 0);
+
 	//Release the COM Objects we created
 	SwapChain->Release();
 	d3d11Device->Release();
 	d3d11DevCon->Release();
 	renderTargetView->Release();
 	triangleVertBuffer->Release();
+	triangleIndexBuffer->Release();
 	VS->Release();
 	PS->Release();
 	VS_Buffer->Release();
 	PS_Buffer->Release();
 	vertLayout->Release();
+	cbPerObjectBuffer->Release();
+	DIKeyboard->Unacquire();
+	DIMouse->Unacquire();
+	DirectInput->Release();
+
 }
 
 bool InitScene()
@@ -250,12 +412,30 @@ bool InitScene()
 	//Create the vertex buffer
 	Vertex v[] =
 	{
-		///////////////**************new**************////////////////////
 		Vertex(0.0f, 0.5f, 0.5f, 1.0f, 0.0f, 0.0f, 1.0f),
 		Vertex(0.5f, -0.5f, 0.5f, 0.0f, 1.0f, 0.0f, 1.0f),
 		Vertex(-0.5f, -0.5f, 0.5f, 0.0f, 0.0f, 1.0f, 1.0f),
-		///////////////**************new**************////////////////////
 	};
+
+	DWORD indices[] = {
+		0, 1, 2,
+	};
+
+	D3D11_BUFFER_DESC indexBufferDesc;
+	ZeroMemory(&indexBufferDesc, sizeof(indexBufferDesc));
+
+	indexBufferDesc.Usage = D3D11_USAGE_DEFAULT;
+	indexBufferDesc.ByteWidth = sizeof(DWORD) * 1 * 3;
+	indexBufferDesc.BindFlags = D3D11_BIND_INDEX_BUFFER;
+	indexBufferDesc.CPUAccessFlags = 0;
+	indexBufferDesc.MiscFlags = 0;
+
+	D3D11_SUBRESOURCE_DATA iinitData;
+
+	iinitData.pSysMem = indices;
+	d3d11Device->CreateBuffer(&indexBufferDesc, &iinitData, &triangleIndexBuffer);
+
+	d3d11DevCon->IASetIndexBuffer(triangleIndexBuffer, DXGI_FORMAT_R32_UINT, 0);
 
 	D3D11_BUFFER_DESC vertexBufferDesc;
 	ZeroMemory(&vertexBufferDesc, sizeof(vertexBufferDesc));
@@ -299,23 +479,102 @@ bool InitScene()
 	//Set the Viewport
 	d3d11DevCon->RSSetViewports(1, &viewport);
 
+	//Create the buffer to send to the cbuffer in effect file
+	D3D11_BUFFER_DESC cbbd;
+	ZeroMemory(&cbbd, sizeof(D3D11_BUFFER_DESC));
+
+	cbbd.Usage = D3D11_USAGE_DEFAULT;
+	cbbd.ByteWidth = sizeof(cbPerObject);
+	cbbd.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
+	cbbd.CPUAccessFlags = 0;
+	cbbd.MiscFlags = 0;
+
+	hr = d3d11Device->CreateBuffer(&cbbd, NULL, &cbPerObjectBuffer);
+
+	//Camera information
+	camPosition = XMVectorSet(0.0f, 0.0f, -5.0f, 0.0f);
+	camTarget = XMVectorSet(0.0f, 0.0f, 0.0f, 0.0f);
+	camUp = XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);
+
+	//Set the View matrix
+	camView = XMMatrixLookAtLH(camPosition, camTarget, camUp);
+
+	//Set the Projection matrix
+	camProjection = XMMatrixPerspectiveFovLH(0.4f*3.14f, (float)Width / Height, 1.0f, 1000.0f);
+
 	return true;
 }
 
-void UpdateScene()
+void StartTimer()
 {
+	LARGE_INTEGER frequencyCount;
+	QueryPerformanceFrequency(&frequencyCount);
+
+	countsPerSecond = double(frequencyCount.QuadPart);
+
+	QueryPerformanceCounter(&frequencyCount);
+	CounterStart = frequencyCount.QuadPart;
+}
+
+double GetTime()
+{
+	LARGE_INTEGER currentTime;
+	QueryPerformanceCounter(&currentTime);
+	return double(currentTime.QuadPart - CounterStart) / countsPerSecond;
+}
+
+double GetFrameTime()
+{
+	LARGE_INTEGER currentTime;
+	__int64 tickCount;
+	QueryPerformanceCounter(&currentTime);
+
+	tickCount = currentTime.QuadPart - frameTimeOld;
+	frameTimeOld = currentTime.QuadPart;
+
+	if (tickCount < 0.0f)
+		tickCount = 0.0f;
+
+	return float(tickCount) / countsPerSecond;
+}
+
+void UpdateScene(double time)
+{
+	//Keep the cubes rotating
+	rot += .0005f;
+	if (rot > 6.26f)
+		rot = 0.0f;
+
+	//Reset triangleWorld
+	triangleWorld = XMMatrixIdentity();
+
+	//Define triangle's world space matrix
+	XMVECTOR rotaxis = XMVectorSet(0.0f, 0.0f, 0.1f, 0.0f);
+	Rotation = XMMatrixRotationAxis(rotaxis, rot);
+	Translation = XMMatrixTranslation(2.0f, 0.0f, 0.0f);
+
+	//Set cube1's world space using the transformations
+	triangleWorld = Translation * Rotation;
+
 
 }
 
 void DrawScene()
 {
+	camView = XMMatrixLookAtLH(camPosition, camTarget, camUp);
+
 	//Clear our backbuffer
 	float bgColor[4] = { (0.0f, 0.0f, 0.0f, 0.0f) };
 	d3d11DevCon->ClearRenderTargetView(renderTargetView, bgColor);
 
-	//Draw the triangle
-	d3d11DevCon->Draw(3, 0);
+	WVP = triangleWorld * camView * camProjection;
+	cbPerObj.WVP = XMMatrixTranspose(WVP);
+	d3d11DevCon->UpdateSubresource(cbPerObjectBuffer, 0, NULL, &cbPerObj, 0, 0);
+	d3d11DevCon->VSSetConstantBuffers(0, 1, &cbPerObjectBuffer);
 
+	//Draw the triangle
+	d3d11DevCon->DrawIndexed(3, 0, 0);
+	
 	//Present the backbuffer to the screen
 	SwapChain->Present(0, 0);
 }
@@ -341,8 +600,24 @@ int messageloop() {
 			DispatchMessage(&msg);
 		}
 		else {
-			// run game code            
-			UpdateScene();
+			// run game code         
+			frameCount++;
+			if (GetTime() > 1.0f)
+			{
+				fps = frameCount;
+				frameCount = 0;
+				StartTimer();
+			}
+
+			frameTime = GetFrameTime();
+
+			DetectInput(frameTime);
+
+			UpdateScene(frameTime);
+
+			frameTime = GetFrameTime();
+
+			UpdateScene(frameTime);
 			DrawScene();
 		}
 	}
