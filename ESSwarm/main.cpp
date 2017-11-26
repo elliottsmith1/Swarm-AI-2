@@ -10,6 +10,8 @@
 #include <d3dcompiler.h>
 #include <dinput.h>
 
+#include "Gameobject.h"
+
 using namespace DirectX;
 
 //Global Declarations - Interfaces//
@@ -41,7 +43,8 @@ LPDIRECTINPUT8 DirectInput;
 
 XMMATRIX WVP;
 XMMATRIX World;
-XMMATRIX triangleWorld;
+//XMMATRIX triangleWorld;
+GameObject* triangle;
 XMMATRIX camView;
 XMMATRIX camProjection;
 
@@ -49,9 +52,9 @@ XMVECTOR camPosition;
 XMVECTOR camTarget;
 XMVECTOR camUp;
 
-XMMATRIX Rotation;
-XMMATRIX Scale;
-XMMATRIX Translation;
+//XMMATRIX Rotation;
+//XMMATRIX Scale;
+//XMMATRIX Translation;
 float rot = 0.01f;
 
 double countsPerSecond = 0.0;
@@ -393,6 +396,9 @@ void CleanUp()
 	DIMouse->Unacquire();
 	DirectInput->Release();
 
+	triangle = nullptr;
+	delete triangle;
+
 }
 
 bool InitScene()
@@ -408,6 +414,8 @@ bool InitScene()
 	//Set Vertex and Pixel Shaders
 	d3d11DevCon->VSSetShader(VS, 0, 0);
 	d3d11DevCon->PSSetShader(PS, 0, 0);
+
+	triangle = new GameObject;
 
 	//Create the vertex buffer
 	Vertex v[] =
@@ -540,23 +548,17 @@ double GetFrameTime()
 
 void UpdateScene(double time)
 {
-	//Keep the cubes rotating
-	rot += .0005f;
-	if (rot > 6.26f)
-		rot = 0.0f;
+	XMFLOAT3 temp_pos = triangle->GetPos();
+	temp_pos.x += 0.0001f;
+	temp_pos.y += 0.0001f;
 
-	//Reset triangleWorld
-	triangleWorld = XMMatrixIdentity();
+	triangle->SetPos(temp_pos);
 
-	//Define triangle's world space matrix
-	XMVECTOR rotaxis = XMVectorSet(0.0f, 0.0f, 0.1f, 0.0f);
-	Rotation = XMMatrixRotationAxis(rotaxis, rot);
-	Translation = XMMatrixTranslation(2.0f, 0.0f, 0.0f);
+	float temp_roll = triangle->GetRoll();
+	temp_roll += 0.0001f;
+	triangle->SetRoll(temp_roll);
 
-	//Set cube1's world space using the transformations
-	triangleWorld = Translation * Rotation;
-
-
+	triangle->Tick(frameTime);
 }
 
 void DrawScene()
@@ -567,7 +569,7 @@ void DrawScene()
 	float bgColor[4] = { (0.0f, 0.0f, 0.0f, 0.0f) };
 	d3d11DevCon->ClearRenderTargetView(renderTargetView, bgColor);
 
-	WVP = triangleWorld * camView * camProjection;
+	WVP = triangle->GetWorldMat() * camView * camProjection;
 	cbPerObj.WVP = XMMatrixTranspose(WVP);
 	d3d11DevCon->UpdateSubresource(cbPerObjectBuffer, 0, NULL, &cbPerObj, 0, 0);
 	d3d11DevCon->VSSetConstantBuffers(0, 1, &cbPerObjectBuffer);
