@@ -41,6 +41,7 @@ HRESULT hr;
 const int Width = 1920;
 const int Height = 1080;
 
+//input
 DIMOUSESTATE mouseLastState;
 LPDIRECTINPUT8 DirectInput;
 
@@ -48,23 +49,20 @@ XMMATRIX WVP;
 XMMATRIX World;
 //XMMATRIX triangleWorld;
 GameObject* triangle;
+
+//camera stuff
 XMMATRIX camView;
 XMMATRIX camProjection;
-
 XMVECTOR camPosition;
 XMVECTOR camTarget;
 XMVECTOR camUp;
-
 XMVECTOR DefaultForward = XMVectorSet(0.0f, 0.0f, 1.0f, 0.0f);
 XMVECTOR DefaultRight = XMVectorSet(1.0f, 0.0f, 0.0f, 0.0f);
 XMVECTOR camForward = XMVectorSet(0.0f, 0.0f, 1.0f, 0.0f);
 XMVECTOR camRight = XMVectorSet(1.0f, 0.0f, 0.0f, 0.0f);
-
 XMMATRIX camRotationMatrix;
-
 float moveLeftRight = 0.0f;
 float moveBackForward = 0.0f;
-
 float camYaw = 0.0f;
 float camPitch = 0.0f;
 
@@ -92,8 +90,6 @@ void UpdateCamera();
 
 void UpdateScene(double time);
 
-//void RenderText(std::wstring text, int inInt);
-
 void StartTimer();
 double GetTime();
 double GetFrameTime();
@@ -119,6 +115,7 @@ struct cbPerObject
 	XMMATRIX World;
 
 	BOOL isInstance;
+	BOOL isLeaf;
 };
 
 cbPerObject cbPerObj;
@@ -139,6 +136,19 @@ struct InstanceData
 {
 	XMFLOAT3 pos;
 };
+
+ID3D11ShaderResourceView* leafTexture;
+ID3D11Buffer *quadVertBuffer;
+ID3D11Buffer *quadIndexBuffer;
+
+// Tree data (loaded from an obj file)
+//ID3D11Buffer* treeInstanceBuff;
+//ID3D11Buffer* treeVertBuff;
+//ID3D11Buffer* treeIndexBuff;
+//int treeSubsets = 0;
+//std::vector<int> treeSubsetIndexStart;
+//std::vector<int> treeSubsetTexture;
+//XMMATRIX treeWorld;
 
 ID3D11Buffer* swarmInstanceBuff;
 XMMATRIX swarmWorld;
@@ -370,37 +380,6 @@ void DetectInput(double time)
 	if (keyboardState[DIK_ESCAPE] & 0x80)
 		PostMessage(hwnd, WM_DESTROY, 0, 0);
 
-	/*XMFLOAT4 camPos;
-
-	XMStoreFloat4(&camPos, camPosition);
-
-	if (keyboardState[DIK_LEFT] & 0x80)
-	{
-		camPos.x -= 100.0f;
-
-		XMVectorSetIntX(camPosition, camPos.x);
-	}
-
-	if (keyboardState[DIK_RIGHT] & 0x80)
-	{
-		camPos.x += 100.0f;
-
-		XMVectorSetIntX(camPosition, camPos.x);
-	}
-
-	if (keyboardState[DIK_UP] & 0x80)
-	{
-		camPos.y += 100.0f;
-
-		XMVectorSetIntY(camPosition, camPos.y);
-	}
-
-	if (keyboardState[DIK_DOWN] & 0x80)
-	{
-		camPos.y -= 100.0f;
-
-		XMVectorSetIntY(camPosition, camPos.y);
-	}*/
 
 	float speed = 15.0f * time;
 
@@ -430,16 +409,6 @@ void DetectInput(double time)
 	{
 		//scaleY -= (mouseCurrState.lY * 0.001f);
 	}
-
-	/*if (rotx > 6.28)
-		rotx -= 6.28;
-	else if (rotx < 0)
-		rotx = 6.28 + rotx;
-
-	if (rotz > 6.28)
-		rotz -= 6.28;
-	else if (rotz < 0)
-		rotz = 6.28 + rotz;*/
 
 	mouseLastState = mouseCurrState;
 
@@ -746,6 +715,9 @@ void DrawScene()
 	//Draw the triangle
 	//d3d11DevCon->DrawIndexed(3, 0, 0);
 
+	d3d11DevCon->VSSetShader(VS, 0, 0);
+	d3d11DevCon->PSSetShader(PS, 0, 0);
+
 	UINT strides[2] = { sizeof(Vertex), sizeof(InstanceData) };
 	UINT offsets[2] = { 0, 0 };
 
@@ -759,22 +731,52 @@ void DrawScene()
 	d3d11DevCon->IASetVertexBuffers(0, 2, vertInstBuffers, strides, offsets);
 
 	//Set the WVP matrix and send it to the constant buffer in effect file
-	WVP = triangle->GetWorldMat() * camView * camProjection;
+	WVP = swarmWorld * camView * camProjection;
 	cbPerObj.WVP = XMMatrixTranspose(WVP);
 	cbPerObj.World = XMMatrixTranspose(swarmWorld);
 	cbPerObj.isInstance = true;        // Tell shaders if this is instanced data so it will know to use instance data or not
+	cbPerObj.isLeaf = true;
 	d3d11DevCon->UpdateSubresource(cbPerObjectBuffer, 0, NULL, &cbPerObj, 0, 0);
 
 	// We are sending two constant buffers to the vertex shader now, wo we will create an array of them
 	ID3D11Buffer* vsConstBuffers[2] = { cbPerObjectBuffer, cbPerInstanceBuffer };
 	d3d11DevCon->VSSetConstantBuffers(0, 2, vsConstBuffers);
-	d3d11DevCon->PSSetConstantBuffers(1, 1, &cbPerObjectBuffer);	
+	d3d11DevCon->PSSetConstantBuffers(1, 1, &cbPerObjectBuffer);
+	d3d11DevCon->PSSetShaderResources(0, 1, &leafTexture);
+	//d3d11DevCon->PSSetSamplers(0, 1, &CubesTexSamplerState);
 
 	d3d11DevCon->RSSetState(RSCullNone);
 	d3d11DevCon->DrawIndexedInstanced(3, swarm_population, 0, 0, 0);
 
 	// Reset the default Input Layout
 	d3d11DevCon->IASetInputLayout(vertLayout);
+
+	for (int i = 0; i < swarm_population; ++i)
+	{
+		// Store the vertex and instance buffers into an array
+		ID3D11Buffer* vertInstBuffers[2] = { triangleVertBuffer, swarmInstanceBuff };
+
+		//Set the models index buffer (same as before)
+		d3d11DevCon->IASetIndexBuffer(triangleIndexBuffer, DXGI_FORMAT_R32_UINT, 0);
+		//Set the models vertex buffer
+		d3d11DevCon->IASetVertexBuffers(0, 2, vertInstBuffers, strides, offsets);
+
+		//Set the WVP matrix and send it to the constant buffer in effect file
+		WVP = swarmWorld * camView * camProjection;
+		cbPerObj.WVP = XMMatrixTranspose(WVP);
+		cbPerObj.World = XMMatrixTranspose(swarmWorld);
+		cbPerObj.isInstance = true;        // Tell shaders if this is instanced data so it will know to use instance data or not
+		cbPerObj.isLeaf = false;        // Tell shaders if this is the leaf instance so it will know to the cbPerInstance data or not
+		d3d11DevCon->UpdateSubresource(cbPerObjectBuffer, 0, NULL, &cbPerObj, 0, 0);
+		d3d11DevCon->VSSetConstantBuffers(0, 1, &cbPerObjectBuffer);
+		d3d11DevCon->PSSetConstantBuffers(1, 1, &cbPerObjectBuffer);
+
+
+		d3d11DevCon->RSSetState(RSCullNone);
+		//int indexStart = treeSubsetIndexStart[i];
+		//int indexDrawAmount = treeSubsetIndexStart[i + 1] - treeSubsetIndexStart[i];
+	}
+
 
 	//Set Vertex and Pixel Shaders
 	d3d11DevCon->VSSetShader(VS, 0, 0);

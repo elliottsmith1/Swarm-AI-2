@@ -1,10 +1,5 @@
 #define NUM_LEAVES_PER_TREE 100
 
-cbuffer cbPerScene
-{
-	float4x4 leafOnTree[NUM_LEAVES_PER_TREE];
-};
-
 cbuffer cbPerObject
 {
 	float4x4 WVP;
@@ -19,6 +14,11 @@ cbuffer cbPerObject
 
 };
 
+cbuffer cbPerScene
+{
+	float4x4 leafOnTree[NUM_LEAVES_PER_TREE];
+};
+
 struct VS_OUTPUT
 {
     float4 Pos : SV_POSITION;
@@ -30,15 +30,18 @@ VS_OUTPUT VS(float4 inPos : POSITION, float4 inColor : COLOR, float3 instancePos
 {
 	VS_OUTPUT output;
 
-	//if (isInstance)
-	//{
-	//	uint currTree = (instanceID / NUM_LEAVES_PER_TREE);
-	//	uint currLeafInTree = instanceID - (currTree * NUM_LEAVES_PER_TREE);
-	//	inPos = mul(inPos, leafOnTree[currLeafInTree]);
+	if (isInstance)
+	{
+		if (isLeaf)
+		{
+			uint currTree = (instanceID / NUM_LEAVES_PER_TREE);
+			uint currLeafInTree = instanceID - (currTree * NUM_LEAVES_PER_TREE);
+			inPos = mul(inPos, leafOnTree[currLeafInTree]);
 
-	//	// set position using instance data
-	//	inPos += float4(instancePos, 0.0f);
-	//}
+			// set position using instance data
+			inPos += float4(instancePos, 0.0f);
+		}
+	}
 
     output.Pos = mul(inPos, WVP);
 	//output.worldPos = mul(inPos, World);
