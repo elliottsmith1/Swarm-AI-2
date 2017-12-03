@@ -9,7 +9,9 @@
 #include <directxmath.h>
 #include <d3dcompiler.h>
 #include <dinput.h>
+#include <iostream>>
 #include <vector>
+#include <string>
 
 #include "Gameobject.h"
 
@@ -47,8 +49,9 @@ LPDIRECTINPUT8 DirectInput;
 
 XMMATRIX WVP;
 XMMATRIX World;
-//XMMATRIX triangleWorld;
 GameObject* triangle;
+
+std::vector<GameObject*> game_objects;
 
 //camera stuff
 XMMATRIX camView;
@@ -121,7 +124,7 @@ struct cbPerObject
 cbPerObject cbPerObj;
 
 const int swarm_population = 100;
-const int numLeavesPerTree = 1000;
+const int numLeavesPerTree = 10;
 
 struct cbPerScene
 {
@@ -446,6 +449,8 @@ void CleanUp()
 
 bool InitScene()
 {
+	game_objects.reserve(swarm_population);
+
 	// Set up the swarm positions then instance buffer
 	std::vector<InstanceData> inst(swarm_population);
 	XMVECTOR tempPos;
@@ -463,10 +468,17 @@ bool InitScene()
 
 		inst[i].pos = newPos;
 
+		GameObject* Triangle = new GameObject;
+
+		Triangle->SetPos(newPos);
+
+		game_objects.push_back(Triangle);
+
 		newPos.x += 1.0f;
 
-		if (i % 2 == 0)
+		if (i % 10 == 0)
 		{
+			newPos.x = 0.0f;
 			newPos.y += 1.0f;
 		}
 	}
@@ -700,7 +712,7 @@ double GetFrameTime()
 
 void UpdateScene(double time)
 {
-	XMFLOAT3 temp_pos = triangle->GetPos();
+	/*XMFLOAT3 temp_pos = triangle->GetPos();
 	temp_pos.x += 0.00005f;
 	temp_pos.y += 0.00005f;
 
@@ -710,7 +722,20 @@ void UpdateScene(double time)
 	temp_roll += 0.0001f;
 	triangle->SetRoll(temp_roll);
 
-	triangle->Tick(frameTime);
+	triangle->Tick(frameTime);*/
+
+	D3D11_MAPPED_SUBRESOURCE mappedResource;
+	d3d11DevCon->Map(swarmInstanceBuff, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResource);
+	InstanceData* instancePos = reinterpret_cast<InstanceData*>(mappedResource.pData);
+
+	for (int i = 0; i < game_objects.size(); i++)
+	{
+		instancePos[i].pos = game_objects[i]->GetPos();
+
+		game_objects[i]->Tick(frameTime);
+	}
+
+	d3d11DevCon->Unmap(swarmInstanceBuff, 0);
 }
 
 void DrawScene()
