@@ -27,24 +27,19 @@ public:
 	XMFLOAT3	GetPos() { return m_pos; }
 	XMFLOAT3	GetScale() { return m_scale; }
 	XMMATRIX	GetWorldMat() { return m_worldMat; }
-
 	float		GetPitch() { return m_pitch; }
 	float		GetYaw() { return m_yaw; }
 	float		GetRoll() { return m_roll; }
-
 	bool		IsPhysicsOn() { return m_physicsOn; }
 	float		GetDrag() { return m_drag; }
 
 	//setters
 	void		SetPos(XMFLOAT3 _pos) { m_pos = _pos; }
-
 	void		SetScale(XMFLOAT3 _scale) { m_scale = _scale; }
-
 	void		SetPitch(float _pitch) { m_pitch = _pitch; }
 	void		SetYaw(float _yaw) { m_yaw = _yaw; }
 	void		SetRoll(float _roll) { m_roll = _roll; }
 	void		SetPitchYawRoll(float _pitch, float _yaw, float _roll) { m_pitch = _pitch; m_yaw = _yaw; m_roll = _roll; }
-
 	void		SetPhysicsOn(bool _physics) { m_physicsOn = _physics; }
 	void		TogglePhysics() { m_physicsOn = !m_physicsOn; }
 	void		SetDrag(float _drag) { m_drag = _drag; }
