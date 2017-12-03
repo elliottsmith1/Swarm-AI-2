@@ -130,16 +130,16 @@ struct cbPerScene
 
 cbPerScene cbPerInst;
 ID3D11Buffer* cbPerInstanceBuffer;
-ID3D11InputLayout* leafVertLayout;
+//ID3D11InputLayout* leafVertLayout;
 
 struct InstanceData
 {
 	XMFLOAT3 pos;
 };
 
-ID3D11ShaderResourceView* leafTexture;
-ID3D11Buffer *quadVertBuffer;
-ID3D11Buffer *quadIndexBuffer;
+//ID3D11ShaderResourceView* leafTexture;
+//ID3D11Buffer *quadVertBuffer;
+//ID3D11Buffer *quadIndexBuffer;
 
 // Tree data (loaded from an obj file)
 //ID3D11Buffer* treeInstanceBuff;
@@ -586,8 +586,8 @@ bool InitScene()
 	hr = d3d11Device->CreateInputLayout(layout, numElements, VS_Buffer->GetBufferPointer(),
 		VS_Buffer->GetBufferSize(), &vertLayout);
 
-	hr = d3d11Device->CreateInputLayout(leafLayout, numLeafElements, VS_Buffer->GetBufferPointer(),
-		VS_Buffer->GetBufferSize(), &leafVertLayout);
+	//hr = d3d11Device->CreateInputLayout(leafLayout, numLeafElements, VS_Buffer->GetBufferPointer(),
+		//VS_Buffer->GetBufferSize(), &leafVertLayout);
 
 	//Set the Input Layout
 	d3d11DevCon->IASetInputLayout(vertLayout);
@@ -724,7 +724,9 @@ void DrawScene()
 	// Store the vertex and instance buffers into an array
 	ID3D11Buffer* vertInstBuffers[2] = { triangleVertBuffer, swarmInstanceBuff };
 
-	d3d11DevCon->IASetInputLayout(leafVertLayout);
+	d3d11DevCon->IASetInputLayout(vertLayout);
+
+	//d3d11DevCon->IASetInputLayout(leafVertLayout);
 
 	d3d11DevCon->IASetIndexBuffer(triangleIndexBuffer, DXGI_FORMAT_R32_UINT, 0);
 
@@ -735,14 +737,14 @@ void DrawScene()
 	cbPerObj.WVP = XMMatrixTranspose(WVP);
 	cbPerObj.World = XMMatrixTranspose(swarmWorld);
 	cbPerObj.isInstance = true;        // Tell shaders if this is instanced data so it will know to use instance data or not
-	cbPerObj.isLeaf = true;
+	//cbPerObj.isLeaf = true;
 	d3d11DevCon->UpdateSubresource(cbPerObjectBuffer, 0, NULL, &cbPerObj, 0, 0);
 
 	// We are sending two constant buffers to the vertex shader now, wo we will create an array of them
 	ID3D11Buffer* vsConstBuffers[2] = { cbPerObjectBuffer, cbPerInstanceBuffer };
 	d3d11DevCon->VSSetConstantBuffers(0, 2, vsConstBuffers);
 	d3d11DevCon->PSSetConstantBuffers(1, 1, &cbPerObjectBuffer);
-	d3d11DevCon->PSSetShaderResources(0, 1, &leafTexture);
+	//d3d11DevCon->PSSetShaderResources(0, 1, &leafTexture);
 	//d3d11DevCon->PSSetSamplers(0, 1, &CubesTexSamplerState);
 
 	d3d11DevCon->RSSetState(RSCullNone);
