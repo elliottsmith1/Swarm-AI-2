@@ -55,6 +55,19 @@ XMVECTOR camPosition;
 XMVECTOR camTarget;
 XMVECTOR camUp;
 
+XMVECTOR DefaultForward = XMVectorSet(0.0f, 0.0f, 1.0f, 0.0f);
+XMVECTOR DefaultRight = XMVectorSet(1.0f, 0.0f, 0.0f, 0.0f);
+XMVECTOR camForward = XMVectorSet(0.0f, 0.0f, 1.0f, 0.0f);
+XMVECTOR camRight = XMVectorSet(1.0f, 0.0f, 0.0f, 0.0f);
+
+XMMATRIX camRotationMatrix;
+
+float moveLeftRight = 0.0f;
+float moveBackForward = 0.0f;
+
+float camYaw = 0.0f;
+float camPitch = 0.0f;
+
 //XMMATRIX Rotation;
 //XMMATRIX Scale;
 //XMMATRIX Translation;
@@ -73,8 +86,9 @@ double frameTime;
 bool InitializeDirect3d11App(HINSTANCE hInstance);
 void CleanUp();
 bool InitScene();
-void UpdateScene();
+//void UpdateScene();
 void DrawScene();
+void UpdateCamera();
 
 void UpdateScene(double time);
 
@@ -356,7 +370,7 @@ void DetectInput(double time)
 	if (keyboardState[DIK_ESCAPE] & 0x80)
 		PostMessage(hwnd, WM_DESTROY, 0, 0);
 
-	XMFLOAT4 camPos;
+	/*XMFLOAT4 camPos;
 
 	XMStoreFloat4(&camPos, camPosition);
 
@@ -366,6 +380,7 @@ void DetectInput(double time)
 
 		XMVectorSetIntX(camPosition, camPos.x);
 	}
+
 	if (keyboardState[DIK_RIGHT] & 0x80)
 	{
 		camPos.x += 100.0f;
@@ -379,11 +394,31 @@ void DetectInput(double time)
 
 		XMVectorSetIntY(camPosition, camPos.y);
 	}
+
 	if (keyboardState[DIK_DOWN] & 0x80)
 	{
 		camPos.y -= 100.0f;
 
 		XMVectorSetIntY(camPosition, camPos.y);
+	}*/
+
+	float speed = 15.0f * time;
+
+	if (keyboardState[DIK_A] & 0x80)
+	{
+		moveLeftRight -= speed;
+	}
+	if (keyboardState[DIK_D] & 0x80)
+	{
+		moveLeftRight += speed;
+	}
+	if (keyboardState[DIK_W] & 0x80)
+	{
+		moveBackForward += speed;
+	}
+	if (keyboardState[DIK_S] & 0x80)
+	{
+		moveBackForward -= speed;
 	}
 
 	if (mouseCurrState.lX != mouseLastState.lX)
@@ -407,6 +442,8 @@ void DetectInput(double time)
 		rotz = 6.28 + rotz;*/
 
 	mouseLastState = mouseCurrState;
+
+	UpdateCamera();
 
 	return;
 }
@@ -819,4 +856,28 @@ LRESULT CALLBACK WndProc(HWND hwnd,
 		msg,
 		wParam,
 		lParam);
+}
+
+void UpdateCamera()
+{
+	camRotationMatrix = XMMatrixRotationRollPitchYaw(camPitch, camYaw, 0);
+	camTarget = XMVector3TransformCoord(DefaultForward, camRotationMatrix);
+	camTarget = XMVector3Normalize(camTarget);
+
+	XMMATRIX RotateYTempMatrix;
+	RotateYTempMatrix = XMMatrixRotationY(camYaw);
+
+	camRight = XMVector3TransformCoord(DefaultRight, RotateYTempMatrix);
+	camUp = XMVector3TransformCoord(camUp, RotateYTempMatrix);
+	camForward = XMVector3TransformCoord(DefaultForward, RotateYTempMatrix);
+
+	camPosition += moveLeftRight*camRight;
+	camPosition += moveBackForward*camUp;
+
+	moveLeftRight = 0.0f;
+	moveBackForward = 0.0f;
+
+	camTarget = camPosition + camTarget;
+
+	camView = XMMatrixLookAtLH(camPosition, camTarget, camUp);
 }
