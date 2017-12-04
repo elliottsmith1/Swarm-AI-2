@@ -21,6 +21,13 @@ GameObject::~GameObject()
 
 void GameObject::Tick(float _time)
 {
+	XMFLOAT3 temp_pos = m_pos;
+
+	temp_pos.x += 0.005f;
+	temp_pos.y += 0.005f;
+
+	m_pos = temp_pos;
+
 	if (m_physicsOn)
 	{			
 		XMFLOAT3 temp_vel = m_vel;

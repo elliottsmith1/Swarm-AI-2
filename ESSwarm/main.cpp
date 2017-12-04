@@ -116,14 +116,11 @@ struct cbPerObject
 {
 	XMMATRIX  WVP;
 	XMMATRIX World;
-
-	BOOL isInstance;
-	BOOL isLeaf;
 };
 
 cbPerObject cbPerObj;
 
-const int swarm_population = 100;
+const int swarm_population = 5000;
 const int numLeavesPerTree = 10;
 
 struct cbPerScene
@@ -139,19 +136,6 @@ struct InstanceData
 {
 	XMFLOAT3 pos;
 };
-
-//ID3D11ShaderResourceView* leafTexture;
-//ID3D11Buffer *quadVertBuffer;
-//ID3D11Buffer *quadIndexBuffer;
-
-// Tree data (loaded from an obj file)
-//ID3D11Buffer* treeInstanceBuff;
-//ID3D11Buffer* treeVertBuff;
-//ID3D11Buffer* treeIndexBuff;
-//int treeSubsets = 0;
-//std::vector<int> treeSubsetIndexStart;
-//std::vector<int> treeSubsetTexture;
-//XMMATRIX treeWorld;
 
 ID3D11Buffer* swarmInstanceBuff;
 XMMATRIX swarmWorld;
@@ -176,15 +160,6 @@ D3D11_INPUT_ELEMENT_DESC layout[] =
 	{ "INSTANCEPOS", 0, DXGI_FORMAT_R32G32B32_FLOAT, 1, 0, D3D11_INPUT_PER_INSTANCE_DATA, 1 }
 };
 UINT numElements = ARRAYSIZE(layout);
-
-D3D11_INPUT_ELEMENT_DESC leafLayout[] =
-{
-	{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0 },
-	{ "COLOR", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 12, D3D11_INPUT_PER_VERTEX_DATA, 0 },
-
-	{ "INSTANCEPOS", 0, DXGI_FORMAT_R32G32B32_FLOAT, 1, 0, D3D11_INPUT_PER_INSTANCE_DATA, numLeavesPerTree }
-};
-UINT numLeafElements = ARRAYSIZE(leafLayout);
 
 int WINAPI WinMain(HINSTANCE hInstance,    //Main windows function
 	HINSTANCE hPrevInstance,
@@ -441,10 +416,7 @@ void CleanUp()
 	DIKeyboard->Unacquire();
 	DIMouse->Unacquire();
 	DirectInput->Release();
-
-	triangle = nullptr;
-	delete triangle;
-
+	swarmInstanceBuff->Release();
 }
 
 bool InitScene()
@@ -476,7 +448,7 @@ bool InitScene()
 
 		newPos.x += 1.0f;
 
-		if (i % 10 == 0)
+		if (i % 500 == 0)
 		{
 			newPos.x = 0.0f;
 			newPos.y += 1.0f;
@@ -491,10 +463,10 @@ bool InitScene()
 	D3D11_BUFFER_DESC instBuffDesc;
 	ZeroMemory(&instBuffDesc, sizeof(instBuffDesc));
 
-	instBuffDesc.Usage = D3D11_USAGE_DEFAULT;
+	instBuffDesc.Usage = D3D11_USAGE_DYNAMIC;
 	instBuffDesc.ByteWidth = sizeof(InstanceData) * swarm_population;
 	instBuffDesc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
-	instBuffDesc.CPUAccessFlags = 0;
+	instBuffDesc.CPUAccessFlags = D3D10_CPU_ACCESS_WRITE;
 	instBuffDesc.MiscFlags = 0;
 	instBuffDesc.StructureByteStride = 0;
 
@@ -558,38 +530,6 @@ bool InitScene()
 	vertexBufferData.pSysMem = v;
 	hr = d3d11Device->CreateBuffer(&vertexBufferDesc, &vertexBufferData, &triangleVertBuffer);
 
-	//srand(100);
-	//XMFLOAT3 fTPos;
-	//XMMATRIX rotationMatrix;
-	//XMMATRIX tempMatrix;
-	//for (int i = 0; i < swarm_population; i++)
-	//{
-	//	float rotX = (rand() % 2000) / 500.0f; // Value between 0 and 4 PI (two circles, makes it slightly more mixed)
-	//	float rotY = (rand() % 2000) / 500.0f;
-	//	float rotZ = (rand() % 2000) / 500.0f;
-
-	//	float distFromCenter = 6.0f - ((rand() % 1000) / 250.0f);
-
-	//	if (distFromCenter > 4.0f)
-	//		distFromCenter = 4.0f;
-
-	//	tempPos = XMVectorSet(distFromCenter, 0.0f, 0.0f, 0.0f);
-	//	rotationMatrix = XMMatrixRotationRollPitchYaw(rotX, rotY, rotZ);
-	//	tempPos = XMVector3TransformCoord(tempPos, rotationMatrix);
-
-	//	if (XMVectorGetY(tempPos) < -1.0f)
-	//		tempPos = XMVectorSetY(tempPos, -XMVectorGetY(tempPos));
-
-	//	XMStoreFloat3(&fTPos, tempPos);
-
-	//	XMMATRIX Scale = XMMatrixScaling(1.0f, 1.0f, 1.0f);
-	//	XMMATRIX Translation = XMMatrixTranslation(fTPos.x, fTPos.y + 8.0f, fTPos.z);
-	//	tempMatrix = Scale * rotationMatrix * Translation;
-
-	//	// To make things simple, we just store the matrix directly into our cbPerInst structure
-	//	cbPerInst.leafOnTree[i] = XMMatrixTranspose(tempMatrix);
-	//}
-
 	//Compile Shaders from shader file
 	hr = D3DCompileFromFile(L"Effects.fx", 0, 0, "VS", "vs_4_0", 0, 0, &VS_Buffer, 0);
 	hr = D3DCompileFromFile(L"Effects.fx", 0, 0, "PS", "ps_4_0", 0, 0, &PS_Buffer, 0);
@@ -610,9 +550,6 @@ bool InitScene()
 	//Create the Input Layout
 	hr = d3d11Device->CreateInputLayout(layout, numElements, VS_Buffer->GetBufferPointer(),
 		VS_Buffer->GetBufferSize(), &vertLayout);
-
-	//hr = d3d11Device->CreateInputLayout(leafLayout, numLeafElements, VS_Buffer->GetBufferPointer(),
-		//VS_Buffer->GetBufferSize(), &leafVertLayout);
 
 	//Set the Input Layout
 	d3d11DevCon->IASetInputLayout(vertLayout);
@@ -712,17 +649,7 @@ double GetFrameTime()
 
 void UpdateScene(double time)
 {
-	/*XMFLOAT3 temp_pos = triangle->GetPos();
-	temp_pos.x += 0.00005f;
-	temp_pos.y += 0.00005f;
-
-	triangle->SetPos(temp_pos);
-
-	float temp_roll = triangle->GetRoll();
-	temp_roll += 0.0001f;
-	triangle->SetRoll(temp_roll);
-
-	triangle->Tick(frameTime);*/
+	d3d11DevCon->UpdateSubresource(cbPerInstanceBuffer, 0, NULL, &cbPerInst, 0, 0);	
 
 	D3D11_MAPPED_SUBRESOURCE mappedResource;
 	d3d11DevCon->Map(swarmInstanceBuff, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResource);
@@ -730,9 +657,12 @@ void UpdateScene(double time)
 
 	for (int i = 0; i < game_objects.size(); i++)
 	{
-		instancePos[i].pos = game_objects[i]->GetPos();
+		if (game_objects[i])
+		{
+			instancePos[i].pos = game_objects[i]->GetPos();
 
-		game_objects[i]->Tick(frameTime);
+			game_objects[i]->Tick(frameTime);
+		}
 	}
 
 	d3d11DevCon->Unmap(swarmInstanceBuff, 0);
@@ -743,14 +673,6 @@ void DrawScene()
 	//Clear our backbuffer
 	float bgColor[4] = { (0.0f, 0.0f, 0.0f, 0.0f) };
 	d3d11DevCon->ClearRenderTargetView(renderTargetView, bgColor);
-
-	/*WVP = triangle->GetWorldMat() * camView * camProjection;
-	cbPerObj.WVP = XMMatrixTranspose(WVP);
-	d3d11DevCon->UpdateSubresource(cbPerObjectBuffer, 0, NULL, &cbPerObj, 0, 0);
-	d3d11DevCon->VSSetConstantBuffers(0, 1, &cbPerObjectBuffer);*/
-
-	//Draw the triangle
-	//d3d11DevCon->DrawIndexed(3, 0, 0);
 
 	d3d11DevCon->VSSetShader(VS, 0, 0);
 	d3d11DevCon->PSSetShader(PS, 0, 0);
@@ -763,8 +685,6 @@ void DrawScene()
 
 	d3d11DevCon->IASetInputLayout(vertLayout);
 
-	//d3d11DevCon->IASetInputLayout(leafVertLayout);
-
 	d3d11DevCon->IASetIndexBuffer(triangleIndexBuffer, DXGI_FORMAT_R32_UINT, 0);
 
 	d3d11DevCon->IASetVertexBuffers(0, 2, vertInstBuffers, strides, offsets);
@@ -773,49 +693,18 @@ void DrawScene()
 	WVP = swarmWorld * camView * camProjection;
 	cbPerObj.WVP = XMMatrixTranspose(WVP);
 	cbPerObj.World = XMMatrixTranspose(swarmWorld);
-	cbPerObj.isInstance = true;        // Tell shaders if this is instanced data so it will know to use instance data or not
-	cbPerObj.isLeaf = true;
 	d3d11DevCon->UpdateSubresource(cbPerObjectBuffer, 0, NULL, &cbPerObj, 0, 0);
 
 	// We are sending two constant buffers to the vertex shader now, wo we will create an array of them
 	ID3D11Buffer* vsConstBuffers[2] = { cbPerObjectBuffer, cbPerInstanceBuffer };
 	d3d11DevCon->VSSetConstantBuffers(0, 2, vsConstBuffers);
 	d3d11DevCon->PSSetConstantBuffers(1, 1, &cbPerObjectBuffer);
-	//d3d11DevCon->PSSetShaderResources(0, 1, &leafTexture);
-	//d3d11DevCon->PSSetSamplers(0, 1, &CubesTexSamplerState);
 
 	d3d11DevCon->RSSetState(RSCullNone);
 	d3d11DevCon->DrawIndexedInstanced(3, swarm_population, 0, 0, 0);
 
 	// Reset the default Input Layout
 	d3d11DevCon->IASetInputLayout(vertLayout);
-
-	//for (int i = 0; i < swarm_population; ++i)
-	//{
-	//	// Store the vertex and instance buffers into an array
-	//	ID3D11Buffer* vertInstBuffers[2] = { triangleVertBuffer, swarmInstanceBuff };
-
-	//	//Set the models index buffer (same as before)
-	//	d3d11DevCon->IASetIndexBuffer(triangleIndexBuffer, DXGI_FORMAT_R32_UINT, 0);
-	//	//Set the models vertex buffer
-	//	d3d11DevCon->IASetVertexBuffers(0, 2, vertInstBuffers, strides, offsets);
-
-	//	//Set the WVP matrix and send it to the constant buffer in effect file
-	//	WVP = swarmWorld * camView * camProjection;
-	//	cbPerObj.WVP = XMMatrixTranspose(WVP);
-	//	cbPerObj.World = XMMatrixTranspose(swarmWorld);
-	//	cbPerObj.isInstance = true;        // Tell shaders if this is instanced data so it will know to use instance data or not
-	//	cbPerObj.isLeaf = false;        // Tell shaders if this is the leaf instance so it will know to the cbPerInstance data or not
-	//	d3d11DevCon->UpdateSubresource(cbPerObjectBuffer, 0, NULL, &cbPerObj, 0, 0);
-	//	d3d11DevCon->VSSetConstantBuffers(0, 1, &cbPerObjectBuffer);
-	//	d3d11DevCon->PSSetConstantBuffers(1, 1, &cbPerObjectBuffer);
-
-
-	//	d3d11DevCon->RSSetState(RSCullNone);
-	//	//int indexStart = treeSubsetIndexStart[i];
-	//	//int indexDrawAmount = treeSubsetIndexStart[i + 1] - treeSubsetIndexStart[i];
-	//}
-
 
 	//Set Vertex and Pixel Shaders
 	d3d11DevCon->VSSetShader(VS, 0, 0);
