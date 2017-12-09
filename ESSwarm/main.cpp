@@ -120,7 +120,7 @@ struct cbPerObject
 
 cbPerObject cbPerObj;
 
-const int swarm_population = 30;
+const int swarm_population = 100;
 const int numLeavesPerTree = 10;
 
 struct cbPerScene
@@ -444,11 +444,21 @@ bool InitScene()
 
 		Triangle->SetPos(newPos);
 
+		if (i == 0)
+		{
+			Triangle->SetIsLeader(true);
+		}
+
+		else
+		{
+			Triangle->SetLeader(game_objects[0]);
+		}
+
 		game_objects.push_back(Triangle);
 
 		newPos.x += 1.0f;
 
-		if (i % 10 == 0)
+		if (i % 50 == 0)
 		{
 			newPos.x = 0.0f;
 			newPos.y += 1.0f;

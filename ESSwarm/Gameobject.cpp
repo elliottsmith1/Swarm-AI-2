@@ -16,7 +16,8 @@ GameObject::GameObject()
 
 GameObject::~GameObject()
 {
-
+	leader = nullptr;
+	delete leader;
 }
 
 void GameObject::Tick(float _time, std::vector<GameObject*> gameobjects)
@@ -77,9 +78,20 @@ void GameObject::ApplySwarmBehaviour(std::vector<GameObject*> gameobjects)
 {
 	CheckNearbyGameobjects(gameobjects);
 
-	ApplyForce(Separate());
+	//ApplyForce(Separate());
 
-	BoundingBox();
+	if (leader)
+	{
+		ApplyForce(Seek(leader->GetPos()));
+	}
+
+	if (is_leader)
+	{
+		m_pos.y += 0.005f;
+		m_pos.x += 0.005f;
+	}
+
+	//BoundingBox();
 }
 
 void GameObject::ApplyForce(XMFLOAT3 _force)
@@ -101,7 +113,7 @@ void GameObject::CheckNearbyGameobjects(std::vector<GameObject*> gameobjects)
 		temp_pos.y - m_pos.y;
 		temp_pos.z - m_pos.z;
 
-		if ((temp_pos.x < nearby_dis) || (temp_pos.y < nearby_dis))
+		if ((temp_pos.x < nearby_dis) && (temp_pos.y < nearby_dis))
 		{
 			nearby_gameobjects.push_back(gameobjects[i]);
 		}
@@ -181,26 +193,51 @@ XMFLOAT3 GameObject::Separate()
 
 void GameObject::BoundingBox()
 {
-	int Xmin = 0, Xmax = 50, Ymin = 0, Ymax = 50;
+	int Xmin = 0, Xmax = 100, Ymin = 0, Ymax = 100;
 
 	//if out of bounds then bounce back and reverse direction 
 	if (m_pos.x < Xmin)
 	{
-		m_pos.x += 1.0f;
+		m_pos.x += 0.1f * max_speed;
 	}
 
 	else if (m_pos.x > Xmax)
 	{
-		m_pos.x -= 1.0f;
+		m_pos.x -= 0.1f * max_speed;
 	}
 
 	if (m_pos.y < Ymin)
 	{
-		m_pos.y += 1.0f;
+		m_pos.y += 0.1f * max_speed;
 	}
 
 	else if (m_pos.y > Ymax)
 	{
-		m_pos.y -= 1.0f;
+		m_pos.y -= 0.1f * max_speed;
 	}
+}
+
+XMFLOAT3 GameObject::Seek(XMFLOAT3 _target)
+{
+	// A vector pointing from the position to the target
+	XMFLOAT3 desired = _target;
+
+	desired.x -= m_pos.x;
+	desired.z -= m_pos.z;
+	desired.y -= m_pos.y;
+
+	// Scale to maximum speed
+	//desired = XMVector3Normalize(desired);
+
+	desired.x *= max_speed;
+	desired.y *= max_speed;
+	desired.z *= max_speed;
+
+	desired.x - m_vel.x;
+	desired.y - m_vel.y;
+	desired.z - m_vel.z;
+
+	//desired = XMVector3ClampLengthV(steer, Vector3::Zero, Vector3(m_boidData->maxForce, m_boidData->maxForce, m_boidData->maxForce));
+
+	return desired;
 }

@@ -29,6 +29,7 @@ public:
 	void CheckNearbyGameobjects(std::vector<GameObject*> gameobjects);
 	XMFLOAT3 Separate();
 	void BoundingBox();
+	XMFLOAT3 Seek(XMFLOAT3 _target);
 
 
 	//getters
@@ -40,7 +41,7 @@ public:
 	float		GetRoll() { return m_roll; }
 	bool		IsPhysicsOn() { return m_physicsOn; }
 	float		GetDrag() { return m_drag; }
-	bool		GetLeader() { return is_leader; }
+	bool		GetIsLeader() { return is_leader; }
 
 	//setters
 	void		SetPos(XMFLOAT3 _pos) { m_pos = _pos; }
@@ -52,7 +53,8 @@ public:
 	void		SetPhysicsOn(bool _physics) { m_physicsOn = _physics; }
 	void		TogglePhysics() { m_physicsOn = !m_physicsOn; }
 	void		SetDrag(float _drag) { m_drag = _drag; }
-	void		SetLeader(bool _leader) { is_leader = _leader; }
+	void		SetIsLeader(bool _leader) { is_leader = _leader; }
+	void		SetLeader(GameObject* _leader) { leader = _leader; }
 
 
 protected:
@@ -77,8 +79,10 @@ protected:
 	bool is_leader = false;
 	std::vector<GameObject*> nearby_gameobjects;
 	float seperation_dis = 1.0f;
-	float nearby_dis = 0.1f;
+	float nearby_dis = 5.0f;
 	float max_speed = 0.00001f;
+
+	GameObject* leader;
 };
 
 #endif
