@@ -120,7 +120,7 @@ struct cbPerObject
 
 cbPerObject cbPerObj;
 
-const int swarm_population = 5000;
+const int swarm_population = 30;
 const int numLeavesPerTree = 10;
 
 struct cbPerScene
@@ -448,7 +448,7 @@ bool InitScene()
 
 		newPos.x += 1.0f;
 
-		if (i % 500 == 0)
+		if (i % 10 == 0)
 		{
 			newPos.x = 0.0f;
 			newPos.y += 1.0f;
@@ -661,7 +661,7 @@ void UpdateScene(double time)
 		{
 			instancePos[i].pos = game_objects[i]->GetPos();
 
-			game_objects[i]->Tick(frameTime);
+			game_objects[i]->Tick(frameTime, game_objects);
 		}
 	}
 
