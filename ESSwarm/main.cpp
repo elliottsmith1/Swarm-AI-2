@@ -121,7 +121,7 @@ struct cbPerObject
 
 cbPerObject cbPerObj;
 
-const int swarm_population = 300;
+const int swarm_population = 2000;
 const int numLeavesPerTree = 10;
 
 struct cbPerScene
@@ -428,13 +428,12 @@ bool InitScene()
 	std::vector<InstanceData> inst(swarm_population);
 	XMVECTOR tempPos;
 	XMFLOAT3 newPos = XMFLOAT3(0.0f, 0.0f, 0.0f);
-	srand(100);
-	// We are just creating random positions for the swarm, between the positions of (-100, 0, -100) to (100, 0, 100)
+
 	// then storing the position in our instanceData array
 	for (int i = 0; i < swarm_population; i++)
 	{
-		newPos.x = (rand() % 50) + 1;
-		newPos.y = (rand() % 50) + 1;
+		newPos.x = (rand() % 100) + 1;
+		newPos.y = (rand() % 100) + 1;
 
 		inst[i].pos = newPos;
 
@@ -609,7 +608,7 @@ bool InitScene()
 	d3d11DevCon->UpdateSubresource(cbPerInstanceBuffer, 0, NULL, &cbPerInst, 0, 0);
 
 	//Camera information
-	camPosition = XMVectorSet(0.0f, 0.0f, -50.0f, 0.0f);
+	camPosition = XMVectorSet(0.0f, 0.0f, -100.0f, 0.0f);
 	camTarget = XMVectorSet(0.0f, 0.0f, 0.0f, 0.0f);
 	camUp = XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);
 

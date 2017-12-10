@@ -9,6 +9,7 @@ GameObject::GameObject()
 	m_yaw = 0.0f;
 	m_roll = 0.0f;
 	m_scale = XMFLOAT3(1.0f, 1.0f, 1.0f);
+	follow_distance = (rand() % 60) + 10;
 
 	m_worldMat = XMMatrixIdentity();
 	m_fudge = XMMatrixIdentity();
@@ -54,25 +55,30 @@ void GameObject::ApplyPhysics(float _time)
 
 void GameObject::ApplySwarmBehaviour(std::vector<GameObject*> gameobjects)
 {
-	CheckNearbyGameobjects(gameobjects);
-
-	ApplyForce(Separate());
+	CheckNearbyGameobjects(gameobjects);	
 
 	if (leader)
 	{
 		target_pos = leader->GetPos();
 	}
 
-	if (is_leader)
+	float distance = Distance(m_pos, target_pos);	
+
+	if (distance > follow_distance)
 	{
-		target_pos.x = (rand() % 5) + 1;
-		target_pos.y = (rand() % 5) + 1;
+		ApplyForce(Seek(target_pos));
 	}
 
-	float distance = Distance(m_pos, target_pos);
-	
+	else
+	{
+		if (is_leader)
+		{
+			target_pos.x = (rand() % 90) + 1;
+			target_pos.y = (rand() % 90) + 1;
+		}
+	}
 
-	//ApplyForce(Seek(target_pos));
+	ApplyForce(Separate());
 
 	BoundingBox();
 }
@@ -168,7 +174,7 @@ XMFLOAT3 GameObject::Separate()
 
 void GameObject::BoundingBox()
 {
-	float Xmin = -10.0f, Xmax = 60.0f, Ymin = -10.0f, Ymax = 60.0f, force = 10.0f;
+	float Xmin = -200.0f, Xmax = 200.0f, Ymin = -200.0f, Ymax = 200.0f, force = 10.0f;
 	XMFLOAT3 temp_pos = m_pos;
 	bool apply_force = false;
 

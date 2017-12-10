@@ -80,10 +80,11 @@ protected:
 
 	bool is_leader = false;
 	std::vector<GameObject*> nearby_gameobjects;
-	float seperation_dis = 2.0f;
+	float seperation_dis = 1.5f;
 	float nearby_dis = 3.0f;
-	float max_speed = 0.1f;
-	float max_force = 5.0f;
+	float max_speed = 0.5f;
+	float max_force = 0.5f;
+	float follow_distance = 5.0f;
 
 	GameObject* leader;
 };
