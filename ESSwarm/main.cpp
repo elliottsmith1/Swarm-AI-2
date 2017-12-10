@@ -12,6 +12,7 @@
 #include <iostream>>
 #include <vector>
 #include <string>
+#include <time.h> 
 
 #include "Gameobject.h"
 
@@ -120,7 +121,7 @@ struct cbPerObject
 
 cbPerObject cbPerObj;
 
-const int swarm_population = 100;
+const int swarm_population = 300;
 const int numLeavesPerTree = 10;
 
 struct cbPerScene
@@ -432,11 +433,8 @@ bool InitScene()
 	// then storing the position in our instanceData array
 	for (int i = 0; i < swarm_population; i++)
 	{
-		/*float randX = ((float)(rand() % 2000) / 10) - 100;
-		float randZ = ((float)(rand() % 2000) / 10) - 100;
-		tempPos = XMVectorSet(randX, 0.0f, randZ, 0.0f);
-
-		XMStoreFloat3(&inst[i].pos, tempPos);*/
+		newPos.x = (rand() % 50) + 1;
+		newPos.y = (rand() % 50) + 1;
 
 		inst[i].pos = newPos;
 
@@ -456,13 +454,13 @@ bool InitScene()
 
 		game_objects.push_back(Triangle);
 
-		newPos.x += 1.0f;
+		/*newPos.x += 1.0f;
 
 		if (i % 50 == 0)
 		{
 			newPos.x = 0.0f;
 			newPos.y += 1.0f;
-		}
+		}*/
 	}
 
 	// Create our swarm instance buffer
@@ -611,7 +609,7 @@ bool InitScene()
 	d3d11DevCon->UpdateSubresource(cbPerInstanceBuffer, 0, NULL, &cbPerInst, 0, 0);
 
 	//Camera information
-	camPosition = XMVectorSet(0.0f, 0.0f, -5.0f, 0.0f);
+	camPosition = XMVectorSet(0.0f, 0.0f, -50.0f, 0.0f);
 	camTarget = XMVectorSet(0.0f, 0.0f, 0.0f, 0.0f);
 	camUp = XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);
 
@@ -659,8 +657,6 @@ double GetFrameTime()
 
 void UpdateScene(double time)
 {
-	d3d11DevCon->UpdateSubresource(cbPerInstanceBuffer, 0, NULL, &cbPerInst, 0, 0);	
-
 	D3D11_MAPPED_SUBRESOURCE mappedResource;
 	d3d11DevCon->Map(swarmInstanceBuff, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResource);
 	InstanceData* instancePos = reinterpret_cast<InstanceData*>(mappedResource.pData);
@@ -676,6 +672,8 @@ void UpdateScene(double time)
 	}
 
 	d3d11DevCon->Unmap(swarmInstanceBuff, 0);
+
+	d3d11DevCon->UpdateSubresource(cbPerInstanceBuffer, 0, NULL, &cbPerInst, 0, 0);
 }
 
 void DrawScene()
@@ -765,6 +763,7 @@ int messageloop() {
 			DetectInput(frameTime);
 
 			UpdateScene(frameTime);
+
 			DrawScene();
 		}
 	}

@@ -29,41 +29,16 @@ void GameObject::Tick(float _time, std::vector<GameObject*> gameobjects)
 
 void GameObject::ApplyPhysics(float _time)
 {
-	if (m_physicsOn)
-	{
-		XMFLOAT3 temp_pos = m_pos;
-		XMFLOAT3 temp_vel = m_vel;
-		XMFLOAT3 temp_acc = m_acc;
+	m_vel.x += m_acc.x * _time;
+	m_vel.y += m_acc.y * _time;
 
-		temp_acc.x -= temp_vel.x;
-		temp_acc.y -= temp_vel.y;
-		temp_acc.z -= temp_vel.z;
+	XMVECTOR temp_vel = XMLoadFloat3(&m_vel);
+	temp_vel = XMVector3NormalizeEst(temp_vel);
+	temp_vel = XMVector3ClampLength(temp_vel, 0.0f, max_speed);
+	XMStoreFloat3(&m_vel, temp_vel);
 
-		temp_acc.x *= _time;
-		temp_acc.y *= _time;
-		temp_acc.z *= _time;
-
-		temp_vel.x += temp_acc.x;
-		temp_vel.y += temp_acc.y;
-		temp_vel.z += temp_acc.z;
-
-		XMFLOAT3 newVel = temp_vel;
-
-		temp_vel = m_vel;
-
-		temp_vel.x *= _time;
-		temp_vel.y *= _time;
-		temp_vel.z *= _time;
-
-		temp_pos.x += temp_vel.x;
-		temp_pos.y += temp_vel.y;
-		temp_pos.z += temp_vel.z;
-
-		XMFLOAT3 newPos = temp_pos;
-
-		m_vel = newVel;
-		m_pos = newPos;
-	}
+	m_pos.x += m_vel.x;
+	m_pos.y += m_vel.y;	
 
 	m_scaleMat = XMMatrixScaling(m_scale.x, m_scale.y, m_scale.z);
 	m_rotMat = XMMatrixRotationRollPitchYaw(m_pitch, m_yaw, m_roll);
@@ -71,27 +46,35 @@ void GameObject::ApplyPhysics(float _time)
 
 	m_worldMat = m_fudge * m_scaleMat * m_rotMat * m_posMat;
 
-	m_acc = XMFLOAT3(0.0f, 0.0f, 0.0f);
+	m_vel.x *= m_drag;
+	m_vel.y *= m_drag;
+
+	m_acc = XMFLOAT3(0.0f, 0.0f, 0.0f);	
 }
 
 void GameObject::ApplySwarmBehaviour(std::vector<GameObject*> gameobjects)
 {
 	CheckNearbyGameobjects(gameobjects);
 
-	//ApplyForce(Separate());
+	ApplyForce(Separate());
 
 	if (leader)
 	{
-		ApplyForce(Seek(leader->GetPos()));
+		target_pos = leader->GetPos();
 	}
 
 	if (is_leader)
 	{
-		m_pos.y += 0.005f;
-		m_pos.x += 0.005f;
+		target_pos.x = (rand() % 5) + 1;
+		target_pos.y = (rand() % 5) + 1;
 	}
 
-	//BoundingBox();
+	float distance = Distance(m_pos, target_pos);
+	
+
+	//ApplyForce(Seek(target_pos));
+
+	BoundingBox();
 }
 
 void GameObject::ApplyForce(XMFLOAT3 _force)
@@ -99,6 +82,10 @@ void GameObject::ApplyForce(XMFLOAT3 _force)
 	m_acc.x += _force.x;
 	m_acc.y += _force.y;
 	m_acc.z += _force.z;
+
+	XMVECTOR temp_acc = XMLoadFloat3(&m_acc);
+	temp_acc = XMVector3ClampLength(temp_acc, 0, max_speed);
+	XMStoreFloat3(&m_acc, temp_acc);
 }
 
 void GameObject::CheckNearbyGameobjects(std::vector<GameObject*> gameobjects)
@@ -108,12 +95,9 @@ void GameObject::CheckNearbyGameobjects(std::vector<GameObject*> gameobjects)
 	//assign any gameobjetcs near enough to local vector
 	for (int i = 0; i < gameobjects.size(); i++)
 	{
-		XMFLOAT3 temp_pos = gameobjects[i]->GetPos();
-		temp_pos.x - m_pos.x;
-		temp_pos.y - m_pos.y;
-		temp_pos.z - m_pos.z;
+		float distance = Distance(m_pos, gameobjects[i]->GetPos());
 
-		if ((temp_pos.x < nearby_dis) && (temp_pos.y < nearby_dis))
+		if ((distance < nearby_dis) && (distance > 0))
 		{
 			nearby_gameobjects.push_back(gameobjects[i]);
 		}
@@ -123,41 +107,30 @@ void GameObject::CheckNearbyGameobjects(std::vector<GameObject*> gameobjects)
 XMFLOAT3 GameObject::Separate()
 {
 	XMFLOAT3 steer = XMFLOAT3(0, 0, 0);
-	int count = 0;
+	float count = 0;
 
 	// For every near boid, check if it's too close
 	for (int i = 0; i < nearby_gameobjects.size(); i++)
 	{
-		XMFLOAT3 temp_pos = nearby_gameobjects[i]->GetPos();
-		temp_pos.x - m_pos.x;
-		temp_pos.y - m_pos.y;
-		temp_pos.z - m_pos.z;
+		float distance = Distance(m_pos, nearby_gameobjects[i]->GetPos());
 
-		if ((temp_pos.x < seperation_dis) && (temp_pos.y < seperation_dis))
+		if ((distance < seperation_dis) && (distance > 0))
 		{
 			// Calculate vector pointing away from neighbor
-			XMFLOAT3 diff;
-			diff.z = m_pos.z - nearby_gameobjects[i]->GetPos().z;
-			diff.y = m_pos.y - nearby_gameobjects[i]->GetPos().y;
-			diff.x = m_pos.x - nearby_gameobjects[i]->GetPos().x;
+			XMVECTOR pos_vec = XMLoadFloat3(&m_pos);
+			XMVECTOR target_pos = XMLoadFloat3(&nearby_gameobjects[i]->GetPos());
+			XMVECTOR distance_vec = XMVectorSubtract(pos_vec, target_pos);
+			XMFLOAT3 diff = XMFLOAT3(0.0f, 0.0f, 0.0f);
 
-			//diff = XMVector3NormalizeEst(diff);
+			//vector_sub = XMVector3NormalizeEst(vector_sub);
+			XMStoreFloat3(&diff, distance_vec);
 
 			//factor in how close to other object
-			if (temp_pos.x < temp_pos.y)
-			{
-				diff.x / temp_pos.x;
-				diff.y / temp_pos.x;
-				diff.z / temp_pos.x;
-			}
+			diff.x /= distance;
+			diff.y /= distance;
+			diff.z /= distance;
 
-			else
-			{
-				diff.x / temp_pos.y;
-				diff.y / temp_pos.y;
-				diff.z / temp_pos.y;
-			}
-
+			//apply movement
 			steer.x += diff.x;
 			steer.y += diff.y;
 			steer.z += diff.z;
@@ -174,7 +147,9 @@ XMFLOAT3 GameObject::Separate()
 		steer.z /= count;
 	}
 
-	//steer = XMVector3Normalize(steer);
+	XMVECTOR temp_steer = XMLoadFloat3(&steer);
+	//temp_steer = XMVector3NormalizeEst(temp_steer);
+	XMStoreFloat3(&steer, temp_steer);
 
 	steer.x *= max_speed;
 	steer.y *= max_speed;
@@ -184,60 +159,92 @@ XMFLOAT3 GameObject::Separate()
 	steer.y -= m_vel.y;
 	steer.z -= m_vel.z;
 
-	float max_force = 1.0f;
-
-	//steer = XMVector3ClampLength(steer, 0, max_force);
+	temp_steer = XMLoadFloat3(&steer);
+	temp_steer = XMVector3ClampLength(temp_steer, 0, max_force);
+	XMStoreFloat3(&steer, temp_steer);
 
 	return steer;
 }
 
 void GameObject::BoundingBox()
 {
-	int Xmin = 0, Xmax = 100, Ymin = 0, Ymax = 100;
+	float Xmin = -10.0f, Xmax = 60.0f, Ymin = -10.0f, Ymax = 60.0f, force = 10.0f;
+	XMFLOAT3 temp_pos = m_pos;
+	bool apply_force = false;
 
 	//if out of bounds then bounce back and reverse direction 
 	if (m_pos.x < Xmin)
-	{
-		m_pos.x += 0.1f * max_speed;
+	{	
+		//temp_pos.x += force;
+		temp_pos.x *= -1.0f;
+
+		apply_force = true;
 	}
 
-	else if (m_pos.x > Xmax)
+	if (m_pos.x > Xmax)
 	{
-		m_pos.x -= 0.1f * max_speed;
+		//temp_pos.x -= force;
+		temp_pos.x *= -1.0f;
+
+		apply_force = true;
 	}
 
 	if (m_pos.y < Ymin)
 	{
-		m_pos.y += 0.1f * max_speed;
+		//temp_pos.y += force;
+		temp_pos.y *= -1.0f;
+
+		apply_force = true;
 	}
 
-	else if (m_pos.y > Ymax)
+	if (m_pos.y > Ymax)
 	{
-		m_pos.y -= 0.1f * max_speed;
+		//temp_pos.y -= force;
+		temp_pos.y *= -1.0f;
+
+		apply_force = true;
+	}
+
+	if (apply_force)
+	{
+		ApplyForce(temp_pos);
 	}
 }
 
 XMFLOAT3 GameObject::Seek(XMFLOAT3 _target)
 {
 	// A vector pointing from the position to the target
-	XMFLOAT3 desired = _target;
 
-	desired.x -= m_pos.x;
-	desired.z -= m_pos.z;
-	desired.y -= m_pos.y;
+	XMVECTOR temp_des = XMLoadFloat3(&_target);
+	XMVECTOR temp_pos = XMLoadFloat3(&m_pos);
+	XMVECTOR temp_vel = XMLoadFloat3(&m_vel);
 
-	// Scale to maximum speed
-	//desired = XMVector3Normalize(desired);
+	XMFLOAT3 speed = XMFLOAT3(max_speed, max_speed, max_speed);
+	XMVECTOR speed_vec = XMLoadFloat3(&speed);
 
-	desired.x *= max_speed;
-	desired.y *= max_speed;
-	desired.z *= max_speed;
+	temp_des = XMVectorSubtract(temp_des, temp_pos);
 
-	desired.x - m_vel.x;
-	desired.y - m_vel.y;
-	desired.z - m_vel.z;
+	temp_des = XMVector3NormalizeEst(temp_des);
 
-	//desired = XMVector3ClampLengthV(steer, Vector3::Zero, Vector3(m_boidData->maxForce, m_boidData->maxForce, m_boidData->maxForce));
+	temp_des = XMVectorMultiply(temp_des, speed_vec);
+
+	temp_des = XMVectorSubtract(temp_des, temp_vel);
+
+	temp_des = XMVector3ClampLength(temp_des, 0, max_force);
+
+	XMFLOAT3 desired = XMFLOAT3(0.0f, 0.0f, 0.0f);
+	XMStoreFloat3(&desired, temp_des);
 
 	return desired;
+}
+
+float GameObject::Distance(XMFLOAT3 pos1, XMFLOAT3 pos2)
+{
+	float distance = 0.0f;
+	XMFLOAT3 v = XMFLOAT3(0.0f, 0.0f, 0.0f);
+
+	v.x = pos1.x - pos2.x;
+	v.y = pos1.y - pos2.y;
+	v.z = pos1.z - pos2.z;
+	return sqrt(v.x*v.x + v.y*v.y + v.z*v.z);
 }
