@@ -9,7 +9,8 @@ GameObject::GameObject()
 	m_yaw = 0.0f;
 	m_roll = 0.0f;
 	m_scale = XMFLOAT3(1.0f, 1.0f, 1.0f);
-	follow_distance = (rand() % 60) + 10;
+
+	follow_distance = (rand() % 50) + 25;
 
 	m_worldMat = XMMatrixIdentity();
 	m_fudge = XMMatrixIdentity();
@@ -19,6 +20,11 @@ GameObject::~GameObject()
 {
 	leader = nullptr;
 	delete leader;
+}
+
+void GameObject::Init()
+{
+	
 }
 
 void GameObject::Tick(float _time, std::vector<GameObject*> gameobjects)
@@ -73,12 +79,25 @@ void GameObject::ApplySwarmBehaviour(std::vector<GameObject*> gameobjects)
 	{
 		if (is_leader)
 		{
-			target_pos.x = (rand() % 90) + 1;
-			target_pos.y = (rand() % 90) + 1;
+			target_pos.x = (rand() % 600) + 1;
+			target_pos.y = (rand() % 600) + 1;
 		}
 	}
 
-	ApplyForce(Separate());
+	if (!is_leader)
+	{
+		ApplyForce(Separate());
+	}
+
+	else 
+	{
+		if (follow_distance != 5.0f)
+		{
+			follow_distance = 5.0f;
+
+			max_speed = 0.7f;
+		}
+	}
 
 	BoundingBox();
 }
@@ -169,12 +188,15 @@ XMFLOAT3 GameObject::Separate()
 	temp_steer = XMVector3ClampLength(temp_steer, 0, max_force);
 	XMStoreFloat3(&steer, temp_steer);
 
+	steer.x *= 10.0f;
+	steer.y *= 10.0f;
+
 	return steer;
 }
 
 void GameObject::BoundingBox()
 {
-	float Xmin = -200.0f, Xmax = 200.0f, Ymin = -200.0f, Ymax = 200.0f, force = 10.0f;
+	float Xmin = -2000.0f, Xmax = 2000.0f, Ymin = -2000.0f, Ymax = 2000.0f, force = 10.0f;
 	XMFLOAT3 temp_pos = m_pos;
 	bool apply_force = false;
 
@@ -254,3 +276,5 @@ float GameObject::Distance(XMFLOAT3 pos1, XMFLOAT3 pos2)
 	v.z = pos1.z - pos2.z;
 	return sqrt(v.x*v.x + v.y*v.y + v.z*v.z);
 }
+
+

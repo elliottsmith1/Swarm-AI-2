@@ -31,7 +31,7 @@ public:
 	void BoundingBox();
 	XMFLOAT3 Seek(XMFLOAT3 _target);
 	float Distance(XMFLOAT3 pos1, XMFLOAT3 pos2);
-
+	void Init();
 
 	//getters
 	XMFLOAT3	GetPos() { return m_pos; }
@@ -80,10 +80,10 @@ protected:
 
 	bool is_leader = false;
 	std::vector<GameObject*> nearby_gameobjects;
-	float seperation_dis = 1.5f;
-	float nearby_dis = 3.0f;
-	float max_speed = 0.5f;
-	float max_force = 0.5f;
+	float seperation_dis = 2.0f;
+	float nearby_dis = 4.0f;
+	float max_speed = 0.6f;
+	float max_force = 5.0f;
 	float follow_distance = 5.0f;
 
 	GameObject* leader;

@@ -360,7 +360,7 @@ void DetectInput(double time)
 		PostMessage(hwnd, WM_DESTROY, 0, 0);
 
 
-	float speed = 15.0f * time;
+	float speed = 50.0f * time;
 
 	if (keyboardState[DIK_A] & 0x80)
 	{
